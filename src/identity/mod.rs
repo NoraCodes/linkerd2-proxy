@@ -28,7 +28,7 @@ pub trait LocalIdentity {
 
 /// A DER-encoded X.509 certificate signing request.
 #[derive(Clone, Debug)]
-pub struct Csr(Arc<Vec<u8>>);
+pub struct CSR(Arc<Vec<u8>>);
 
 /// An endpoint's identity.
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -75,15 +75,15 @@ const SIGNATURE_ALG_RUSTLS_ALGORITHM: rustls::internal::msgs::enums::SignatureAl
     rustls::internal::msgs::enums::SignatureAlgorithm::ECDSA;
 const TLS_VERSIONS: &[rustls::ProtocolVersion] = &[rustls::ProtocolVersion::TLSv1_2];
 
-// === impl Csr ===
+// === impl CSR ===
 
-impl Csr {
+impl CSR {
     pub fn from_der(der: Vec<u8>) -> Option<Self> {
         if der.is_empty() {
             return None;
         }
 
-        Some(Csr(Arc::new(der)))
+        Some(CSR(Arc::new(der)))
     }
 
     pub fn to_vec(&self) -> Vec<u8> {
@@ -251,7 +251,7 @@ impl TrustAnchors {
                 NO_OCSP,
             )
             .map_err(InvalidCrt)?;
-        println!("certified {}", crt.name.as_ref());
+        debug!("certified {}", crt.name.as_ref());
 
         let k = SigningKey(key.0.clone());
         let key = rustls::sign::CertifiedKey::new(crt.chain, Arc::new(Box::new(k)));
