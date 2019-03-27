@@ -28,6 +28,8 @@ pub type Conditional<T> = ::Conditional<T, ReasonForNoIdentity>;
 pub type PeerIdentity = Conditional<identity::Name>;
 pub type Status = Conditional<()>;
 
+pub type TlsStatus = Conditional<(identity::Name, Conditional<identity::Name>)>;
+
 pub trait HasPeerIdentity {
     fn peer_identity(&self) -> PeerIdentity;
 }

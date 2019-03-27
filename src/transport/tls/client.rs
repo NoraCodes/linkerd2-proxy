@@ -155,7 +155,16 @@ where
                     let io = try_ready!(future.poll());
                     let io = BoxedIo::new(super::TlsIo::from(io));
                     trace!("established TLS to {}", server_name.as_ref());
-                    let c = Connection::tls(io, Conditional::Some(server_name.clone()));
+                    let c = Connection::tls(
+                        io,
+                        Conditional::Some(server_name.clone()),
+                        Conditional::Some((
+                            server_name.clone(),
+                            Conditional::None(super::ReasonForNoIdentity::NoPeerName(
+                                super::ReasonForNoPeerName::NotProvidedByRemote,
+                            )),
+                        )),
+                    );
                     return Ok(Async::Ready(c));
                 }
             };

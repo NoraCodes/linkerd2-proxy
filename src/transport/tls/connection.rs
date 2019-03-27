@@ -31,6 +31,9 @@ pub struct Connection {
     /// Whether or not the connection is secured with TLS.
     tls_peer_identity: super::PeerIdentity,
 
+    /// Add documentation
+    tls_status: super::TlsStatus,
+
     /// If true, the proxy should attempt to detect the protocol for this
     /// connection. If false, protocol detection should be skipped.
     detect_protocol: bool,
@@ -53,6 +56,9 @@ impl Connection {
             tls_peer_identity: Conditional::None(ReasonForNoIdentity::NoPeerName(
                 ReasonForNoPeerName::NotHttp,
             )),
+            tls_status: Conditional::None(ReasonForNoIdentity::NoPeerName(
+                ReasonForNoPeerName::NotHttp,
+            )),
             detect_protocol: false,
             orig_dst: None,
         }
@@ -67,6 +73,7 @@ impl Connection {
             io: BoxedIo::new(io),
             peek_buf,
             tls_peer_identity: Conditional::None(why_no_tls),
+            tls_status: Conditional::None(why_no_tls),
             detect_protocol: true,
             orig_dst: None,
         }
@@ -75,11 +82,19 @@ impl Connection {
     pub(super) fn tls(
         io: BoxedIo,
         tls_peer_identity: Conditional<identity::Name, super::ReasonForNoPeerName>,
+        tls_status: Conditional<
+            (
+                identity::Name,
+                Conditional<identity::Name, super::ReasonForNoIdentity>,
+            ),
+            super::ReasonForNoIdentity,
+        >,
     ) -> Self {
         Connection {
             io: io,
             peek_buf: BytesMut::new(),
             tls_peer_identity: tls_peer_identity.map_reason(|r| r.into()),
+            tls_status: tls_status,
             detect_protocol: true,
             orig_dst: None,
         }

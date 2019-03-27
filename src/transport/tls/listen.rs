@@ -44,7 +44,7 @@ pub struct Listen<L, G = ()> {
 /// A server socket that is in the process of conditionally upgrading to TLS.
 enum Handshake {
     Init(Option<Inner>),
-    Upgrade(super::Accept<Prefixed<TcpStream>>),
+    Upgrade(super::Accept<Prefixed<TcpStream>>, identity::Name),
 }
 
 struct Inner {
@@ -316,17 +316,29 @@ impl Future for Handshake {
                         }
                     }
                 }
-                Handshake::Upgrade(future) => {
+                Handshake::Upgrade(future, server_name) => {
                     let io = try_ready!(future.poll());
-                    let client_id = Self::client_identity(&io)
+                    let client_id_old = Self::client_identity(&io)
                         .map(Conditional::Some)
                         .unwrap_or_else(|| {
                             Conditional::None(super::ReasonForNoPeerName::NotProvidedByRemote)
                         });
+                    let client_id = Self::client_identity(&io)
+                        .map(Conditional::Some)
+                        .unwrap_or_else(|| {
+                            Conditional::None(super::ReasonForNoIdentity::NoPeerName(
+                                super::ReasonForNoPeerName::NotProvidedByRemote,
+                            ))
+                        });
+
                     trace!("accepted TLS connection; client={:?}", client_id);
 
                     let io = BoxedIo::new(super::TlsIo::from(io));
-                    return Ok(Async::Ready(Connection::tls(io, client_id)));
+                    return Ok(Async::Ready(Connection::tls(
+                        io,
+                        client_id_old,
+                        Conditional::Some((server_name.clone(), client_id)),
+                    )));
                 }
             }
         }
@@ -355,7 +367,7 @@ impl Inner {
     fn into_tls_upgrade(self) -> Handshake {
         let future = Acceptor::from(self.config.clone())
             .accept(Prefixed::new(self.peek_buf.freeze(), self.socket));
-        Handshake::Upgrade(future)
+        Handshake::Upgrade(future, self.server_name)
     }
 
     fn into_plaintext(self) -> Connection {
