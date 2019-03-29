@@ -10,14 +10,19 @@ use super::identity;
 use proxy::http::router;
 use proxy::server::Source;
 use tap;
-use transport::{connect, tls};
+use transport::{
+    connect,
+    tls::{
+        self, IdentityState, IdentityStatus, PeerIdentity, ReasonForNoIdentity,
+        ReasonForNoPeerIdentity,
+    },
+};
 use {Conditional, NameAddr};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Endpoint {
     pub addr: SocketAddr,
-    pub dst_name: Option<NameAddr>,
-    pub tls_client_id: tls::PeerIdentity,
+    pub identity_status: IdentityStatus<IdentityState>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -31,8 +36,9 @@ impl From<SocketAddr> for Endpoint {
     fn from(addr: SocketAddr) -> Self {
         Self {
             addr,
-            dst_name: None,
-            tls_client_id: Conditional::None(tls::ReasonForNoPeerName::NotHttp.into()),
+            identity_status: Conditional::None(ReasonForNoIdentity::NoPeerIdentity(
+                ReasonForNoPeerIdentity::NotHttp.into(),
+            )),
         }
     }
 }
@@ -44,8 +50,8 @@ impl connect::HasPeerAddr for Endpoint {
 }
 
 impl tls::HasPeerIdentity for Endpoint {
-    fn peer_identity(&self) -> tls::PeerIdentity {
-        Conditional::None(tls::ReasonForNoPeerName::Loopback.into())
+    fn peer_identity(&self) -> PeerIdentity {
+        Conditional::None(ReasonForNoPeerIdentity::Loopback.into())
     }
 }
 
@@ -62,14 +68,11 @@ impl tap::Inspect for Endpoint {
         req.extensions().get::<Source>().map(|s| s.remote)
     }
 
-    fn src_tls<'a, B>(
-        &self,
-        req: &'a http::Request<B>,
-    ) -> Conditional<&'a identity::Name, tls::ReasonForNoIdentity> {
+    fn src_tls<B>(&self, req: &http::Request<B>) -> IdentityStatus<IdentityState> {
         req.extensions()
             .get::<Source>()
-            .map(|s| s.tls_peer.as_ref())
-            .unwrap_or_else(|| Conditional::None(tls::ReasonForNoIdentity::Disabled))
+            .map(|s| s.identity_status)
+            .unwrap_or_else(|| Conditional::None(ReasonForNoIdentity::Disabled))
     }
 
     fn dst_addr<B>(&self, _: &http::Request<B>) -> Option<SocketAddr> {
@@ -122,9 +125,9 @@ impl<A> router::Recognize<http::Request<A>> for RecognizeEndpoint {
             .and_then(Source::orig_dst_if_not_local)
             .or(self.default_addr)?;
 
-        let tls_client_id = src
-            .map(|s| s.tls_peer.clone())
-            .unwrap_or_else(|| Conditional::None(tls::ReasonForNoIdentity::Disabled));
+        let identity_status = src
+            .map(|s| s.identity_status.clone())
+            .unwrap_or_else(|| Conditional::None(ReasonForNoIdentity::Disabled));
 
         let dst_name = req
             .extensions()
@@ -135,6 +138,7 @@ impl<A> router::Recognize<http::Request<A>> for RecognizeEndpoint {
 
         Some(Endpoint {
             addr,
+            identity_status,
             dst_name,
             tls_client_id,
         })

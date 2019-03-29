@@ -75,6 +75,7 @@ pub struct Source {
     pub remote: SocketAddr,
     pub local: SocketAddr,
     pub orig_dst: Option<SocketAddr>,
+    pub identity_status: tls::IdentityStatus<tls::IdentityState>,
     pub tls_peer: tls::PeerIdentity,
     _p: (),
 }

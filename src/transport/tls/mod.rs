@@ -21,58 +21,11 @@ pub use self::connection::Connection;
 pub use self::listen::Listen;
 pub use self::rustls::TLSError as Error;
 
-/// Describes whether or not a connection was secured with TLS and, if it was
-/// not, the reason why.
-pub type Conditional<T> = ::Conditional<T, ReasonForNoIdentity>;
-
-pub type PeerIdentity = Conditional<identity::Name>;
-pub type Status = Conditional<()>;
-
-pub type TlsStatus = Conditional<(identity::Name, Conditional<identity::Name>)>;
-
-pub trait HasPeerIdentity {
-    fn peer_identity(&self) -> PeerIdentity;
-}
+// ===== Remove this =====
+pub type Status = ::Conditional<(), ReasonForNoIdentity>;
 
 pub trait HasStatus {
     fn tls_status(&self) -> Status;
-}
-
-impl<T: HasPeerIdentity> HasStatus for T {
-    fn tls_status(&self) -> Status {
-        self.peer_identity().map(|_| ())
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum ReasonForNoIdentity {
-    /// Identity is administratively disabled.
-    Disabled,
-
-    /// The remote peer does not have a known identity name.
-    NoPeerName(ReasonForNoPeerName),
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum ReasonForNoPeerName {
-    /// The connection is a non-HTTP connection so we don't know anything
-    /// about the destination besides its address.
-    NotHttp,
-
-    /// The connection is for HTTP but the HTTP request doesn't have an
-    /// authority so we can't extract the identity from it.
-    NoAuthorityInHttpRequest,
-
-    /// The destination service didn't give us the identity, which is its way
-    /// of telling us that we shouldn't do TLS for this endpoint.
-    NotProvidedByServiceDiscovery,
-
-    /// No TLS is wanted because the connection is a loopback connection which
-    /// doesn't need or support TLS.
-    Loopback,
-
-    // Identity was not provided by the remote peer.
-    NotProvidedByRemote,
 }
 
 impl fmt::Display for Status {
@@ -84,33 +37,87 @@ impl fmt::Display for Status {
     }
 }
 
-impl From<ReasonForNoPeerName> for ReasonForNoIdentity {
-    fn from(r: ReasonForNoPeerName) -> Self {
-        ReasonForNoIdentity::NoPeerName(r)
-    }
+// ===== end =====
+
+/// The ultimate goal of this to be able to say on the Identity Controller's
+/// proxy that there is a TLS status on the server, but the peer of that
+/// TLS connection did not provide its own peer identity. This model would
+/// solve the following with:
+///
+/// TlsStatus::Some(
+///     TlsState {
+///         server_identity: identity::Name,
+///         client_identity: None(ReasonForNoClientIdenityt::NotProvidedByClient)
+///     }
+/// )
+
+pub type IdentityStatus<T> = ::Conditional<T, ReasonForNoIdentity>;
+
+pub type PeerIdentity = ::Conditional<identity::Name, ReasonForNoPeerIdentity>;
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ReasonForNoIdentity {
+    Disabled,
+    NoPeerIdentity(ReasonForNoPeerIdentity),
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ReasonForNoPeerIdentity {
+    /// The connection is a loopback connection which does not need or support
+    /// TLS.
+    Loopback,
+
+    /// The connection protocol is HTTP, but the request does not have an
+    /// authority so we cannot extract the identity from it.
+    NoAuthorityInHttpRequest,
+
+    /// The connection protocol is not HTTP so we don't know anything about
+    /// the destination besides its address.
+    NotHttp,
+
+    /// The destination service did not give us the identity, which is its way
+    /// of telling us that we should not TLS for this endpoint.
+    NotProvidedByServiceDiscovery,
+
+    /// Identity was not provided by the client.
+    NotProvidedByClient,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct IdentityState {
+    server_identity: identity::Name,
+    client_identity: PeerIdentity,
+}
+
+pub trait HasIdentity {
+    fn identity(&self) -> IdentityStatus<IdentityState>;
+}
+
+pub trait HasPeerIdentity {
+    fn peer_identity(&self) -> PeerIdentity;
 }
 
 impl fmt::Display for ReasonForNoIdentity {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ReasonForNoIdentity::Disabled => write!(f, "disabled"),
-            ReasonForNoIdentity::NoPeerName(n) => write!(f, "{}", n),
+            ReasonForNoIdentity::NoPeerIdentity(r) => write!(f, "{}", r),
         }
     }
 }
 
-impl fmt::Display for ReasonForNoPeerName {
+impl fmt::Display for ReasonForNoPeerIdentity {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ReasonForNoPeerName::Loopback => write!(f, "loopback"),
-            ReasonForNoPeerName::NoAuthorityInHttpRequest => {
+            ReasonForNoPeerIdentity::Loopback => write!(f, "loopback"),
+            ReasonForNoPeerIdentity::NoAuthorityInHttpRequest => {
                 write!(f, "no_authority_in_http_request")
             }
-            ReasonForNoPeerName::NotHttp => write!(f, "not_http"),
-            ReasonForNoPeerName::NotProvidedByRemote => write!(f, "not_provided_by_remote"),
-            ReasonForNoPeerName::NotProvidedByServiceDiscovery => {
+            ReasonForNoPeerIdentity::NotHttp => write!(f, "not_http"),
+            ReasonForNoPeerIdentity::NotProvidedByServiceDiscovery => {
                 write!(f, "not_provided_by_service_discovery")
             }
+            ReasonForNoPeerIdentity::NotProvidedByClient => write!(f, "not_provided_by_client"),
         }
     }
 }

@@ -4,7 +4,7 @@ use std::net;
 use std::sync::Arc;
 
 use identity;
-use transport::tls::ReasonForNoIdentity;
+use transport::tls::{self, ReasonForNoIdentity};
 use Conditional;
 
 mod daemon;
@@ -44,10 +44,12 @@ pub fn new() -> (Layer, Server, Daemon) {
 /// `Stack` target types
 pub trait Inspect {
     fn src_addr<B>(&self, req: &http::Request<B>) -> Option<net::SocketAddr>;
-    fn src_tls<'a, B>(
-        &self,
-        req: &'a http::Request<B>,
-    ) -> Conditional<&'a identity::Name, ReasonForNoIdentity>;
+    // fn src_tls<'a, B>(
+    //     &self,
+    //     req: &'a http::Request<B>,
+    // ) -> Conditional<&'a identity::Name, ReasonForNoIdentity>;
+
+    fn src_tls<B>(&self, req: &http::Request<B>) -> tls::IdentityStatus<tls::IdentityState>;
 
     fn dst_addr<B>(&self, req: &http::Request<B>) -> Option<net::SocketAddr>;
     fn dst_labels<B>(&self, req: &http::Request<B>) -> Option<&IndexMap<String, String>>;

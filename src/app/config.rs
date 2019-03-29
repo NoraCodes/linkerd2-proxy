@@ -80,7 +80,7 @@ pub struct Config {
     /// The maximum amount of time to wait for a connection to the controller.
     pub control_connect_timeout: Duration,
 
-    pub identity_config: tls::Conditional<identity::Config>,
+    pub identity_config: tls::IdentityStatus<identity::Config>,
     //
     // Destination Config
     //
@@ -672,7 +672,9 @@ pub fn parse_control_addr<S: Strings>(
         (None, None) => Ok(None),
         (Some(ref addr), _) if addr.is_loopback() => Ok(Some(ControlAddr {
             addr: addr.clone(),
-            identity: Conditional::None(tls::ReasonForNoPeerName::Loopback.into()),
+            identity: Conditional::None(tls::ReasonForNoIdentity::NoPeerIdentity(
+                tls::ReasonForNoPeerIdentity::Loopback.into(),
+            )),
         })),
         (Some(addr), Some(name)) => Ok(Some(ControlAddr {
             addr,
