@@ -4,6 +4,7 @@ extern crate tower_discover;
 
 use self::tower_discover::Discover;
 use hyper::body::Payload;
+use std::error;
 use std::marker::PhantomData;
 use std::time::Duration;
 
@@ -30,6 +31,9 @@ pub struct Stack<M, A, B> {
     inner: M,
     _marker: PhantomData<fn(A) -> B>,
 }
+
+#[allow(unused)] // only used in where clauses...
+type Error = Box<dyn error::Error + Send + Sync>;
 
 // === impl Layer ===
 
@@ -58,6 +62,8 @@ where
     <M::Value as Discover>::Service: svc::Service<http::Request<A>, Response = http::Response<B>>,
     A: Payload,
     B: Payload,
+    Error: From<<M::Value as Discover>::Error>
+        + From<<<M::Value as Discover>::Service as svc::Service<http::Request<A>>>::Error>,
 {
     type Value = <Stack<M, A, B> as svc::Stack<T>>::Value;
     type Error = <Stack<M, A, B> as svc::Stack<T>>::Error;
@@ -93,6 +99,8 @@ where
     <M::Value as Discover>::Service: svc::Service<http::Request<A>, Response = http::Response<B>>,
     A: Payload,
     B: Payload,
+    Error: From<<M::Value as Discover>::Error>
+        + From<<<M::Value as Discover>::Service as svc::Service<http::Request<A>>>::Error>,
 {
     type Value = Balance<WithPeakEwma<M::Value, PendingUntilFirstData>, PowerOfTwoChoices>;
     type Error = M::Error;
